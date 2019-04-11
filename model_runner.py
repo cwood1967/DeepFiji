@@ -1,17 +1,29 @@
 import os
 import sys
+import time
+import shutil
 import cherrypy
 import subprocess
 
 class model_runner(object):
-    
+
     gpustring = 'Tesla V100-PCIE-32GB'
+
+    
     train_cmd = ['python',
-                 '/scratch/cjw/DeepLearning/Trainer.py']
+                 '/n/projects/c2015/DeepFiji/Trainer.py']
 
+    retrain_cmd = ['python',
+                   '/n/projects/c2015/DeepFiji/Retrainer.py']
+    
     infer_cmd = ['python',
-                 '/scratch/cjw/DeepLearning/Inferer.py']
+                 '/n/projects/c2015/DeepFiji/Inferer.py']
 
+    py_logdir = '/n/projects/c2015/DeepFiji/logs/'
+
+    tb_logdir = '/scratch/c2015/DeepFiji/logs'
+    tb_port = '8008'
+    
     lock = False
     proc = None
 
@@ -53,22 +65,38 @@ class model_runner(object):
             return "GPU is busy"
 
 
-    def run_training(self, path):
+    def run_training(self, path, cmd):
         if model_runner.lock is True:
             return "Already running ....?"
 
         if not self.is_gpu_available():
             return "GPU is busy"
+
+        subprocess.run(['killall', 'tensorboard'])
+        try:
+            shutil.rmtree(self.tb_logdir)
+        except:
+            pass
         
         if os.path.exists("train.log"):
             os.remove("train.log")
             
         model_runner.f = open("train.log", 'w')
-        model_runner.lock = True
-        print(path, "\nLD ", os.environ['LD_LIBRARY_PATH'])
-        cmd = self.train_cmd + [path]
+        #model_runner.lock = True
+
+        cmd = cmd + [path]
+
+        try:
+            model_runner.f.close()
+        except:
+            pass
+        
+        model_runner.f = open(self.py_logdir + 'training.log', 'w')
+        
         model_runner.proc = subprocess.Popen(cmd, stdout=model_runner.f,
-                                           bufsize=1)
+                                             stderr=subprocess.STDOUT, bufsize=1,
+                                             universal_newlines=True)
+
         res = "The model at " + path + " is training"
         if os.path.exists(path):
             res += "True "
@@ -80,50 +108,91 @@ class model_runner(object):
 
     def run_tensorboard(self):
         cmd =['tensorboard',
-              '--logdir=/scratch/cjw/DeepLearning/logs',
-              '--port=8009',
-              "--samples_per_plugin=images=0"
+              '--logdir=' + self.tb_logdir,
+              '--port=' + self.tb_port,
+              '--samples_per_plugin=images=0'
               ]
 
-        subprocess.Popen(cmd)
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return "started tensorboard"
         
 
     def run_infer(self, path):
         if model_runner.lock is True:
             return "Already running....?"
-        model_runner.lock = True
+        #model_runner.lock = True
+
+        if not self.is_gpu_available():
+            return "GPU is busy"
+
         cmd = self.infer_cmd + [path]
-        model_runner.proc = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                           universal_newlines=True,
-                                           bufsize=1)
+
+        try:
+            model_runner.f.close()
+        except:
+            pass
+        
+        model_runner.f = open(self.py_logdir + 'inferer.log', 'w')
+        
+        model_runner.proc = subprocess.Popen(cmd, stdout=model_runner.f,
+                                             stderr=subprocess.STDOUT, bufsize=1,
+                                             universal_newlines=True)
         
         res = "The model at " + path + " is inferring"
         if os.path.exists(path):
             res += "True "
         else:
             res += "False "
-        model_runner.lock = False
+        #model_runner.lock = False
         return ' '.join(cmd)
 
 
     @cherrypy.expose
+    def convert_path(self, path):
+        print(path)
+        repdict = { 'S:' : '/n/core',
+                    'U:' : '/n/projects',
+                    '/Volumes': '/n',
+                    's:' : '/n/core',
+                    'u:' : '/n/projects'
+                    }
+    
+        path = path.replace('\\', '/')
+        print(path)
+
+        for key in repdict.keys():
+            if key in path:
+                v = repdict[key]
+                path = path.replace(key, v)
+                break
+
+        res = path
+        if not res.endswith('/'):
+            res += '/'
+        print(res)
+        return res
+
+    @cherrypy.expose
     def train(self, path='/n/core/micro'):
-        res = self.run_training(path)
+        path = self.convert_path(path)
+        res = self.run_training(path, cmd=self.train_cmd)
         self.run_tensorboard()
         
-        return "check http://volta:8009 to see progress"
+        return "check http://volta:" + self.tb_port + " to see progress"
 
 
     @cherrypy.expose
     def infer(self, path='/n/core/micro'):
+        path = self.convert_path(path)
         res = self.run_infer(path)
         return res
 
     @cherrypy.expose
     def retrain(self, path='/n/core/micro'):
-        # retrainer.py
-        pass
+        path = self.convert_path(path)
+        res = self.run_training(path, cmd=self.retrain_cmd)
+        self.run_tensorboard()
+        return  "retraining check http://volta:" + self.tb_port + " to see progress"
     
     @cherrypy.expose
     def is_locked(self):
@@ -139,6 +208,15 @@ class model_runner(object):
     @cherrypy.expose
     def get_stdout(self):
         return model_runner.f.read()
+
+    @cherrypy.expose
+    def kill(self):
+        try:
+            model_runner.proc.kill()
+            model_runner.f.close()
+            return("killed the process")
+        except:
+            return("couldn't kill - maybe  not running?")
     
 if __name__ == '__main__':
     ## run this here please

@@ -2,29 +2,47 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import tensorflow as tf
-import skimage
 import random
-import shutil
-import sys
 import utils
+import shutil
+import os
+import sys
+import skimage
+import datetime
 
 data=sys.argv[1]
 print(data)
 
-both=skimage.external.tifffile.imread(data+'Training_RotShift.tif')
+##################MOVE ORIGINAL MODELS############################
+if (os.path.isdir(data+'NewModels/') and os.path.isdir(data+'OldModels/')):
+    now = datetime.datetime.now()
+    os.rename(data+'OldModels/', data+'OldModels'+str(now.strftime("%Y%m%d%H%M")))
+if os.path.isdir(data+'NewModels/'):
+    os.rename(data+'NewModels/', data+'OldModels/')
+
+
+##########LOAD DATA####################    
+both=skimage.external.tifffile.imread(data+'Training_retrain_RotShift.tif')
 both=np.swapaxes(np.swapaxes(both,1,2), 2,3)
 
 x_dim=both.shape[1]
 y_dim=both.shape[2]
 channels=both.shape[3]-2
 
+##########LOAD CONFIG FILE#################
+file=open(data+'Network.txt')
+base_scaler=int(file.readline())
+baseline_noise=float(file.readline())
+x_dim=int(file.readline())
+mean=float(file.readline())
+std=float(file.readline())
+model=int(file.readline())
+channels=int(file.readline())
+file.close()
+
+############NORMALIZE DATA###########################
 train_data=both[:,:,:,0:-2]/655350.0
 train_truth=both[:,:,:,[-2,-1]]
-
-non_zeros=np.where(train_data!=0)
-mean=np.mean(train_data[non_zeros])
-std=np.std(train_data[non_zeros])
-
 
 train_data=(train_data-mean)/(std*1)+0.5
 train_truth[np.where(train_truth>0.1)]=1
@@ -38,15 +56,7 @@ validation_data=(validation_data-mean)/(std*1)+0.5
 validation_truth=validation[:,:,:,[-2,-1]]
 validation_truth[np.where(validation_truth>0.1)]=1
 
-
-file=open(data+'Network.txt')
-base_scaler=int(file.readline())
-baseline_noise=float(file.readline())
-file.close()
-print([base_scaler, baseline_noise])
-
-
-##############################NETWORK BLOCK######################################
+##################DESIGN UNET############################
 tf.reset_default_graph()
 #Input and output
 x=tf.placeholder(dtype=tf.float32, shape=[None, x_dim,y_dim,channels], name='x')
@@ -124,22 +134,27 @@ tf.summary.image('mask', tf.reshape(probs[:,:,:,1], [-1, x_dim, y_dim,1]), 3)
 
 merge = tf.summary.merge_all()
 
+#######################RETRAIN#############################
 
-#######TRAINING BLOCK################
+saver = tf.train.Saver()
+sess=tf.Session()
+sess.run(tf.global_variables_initializer())
+
+data_model=data+'OldModels/Model'+str(model)
+
+saver.restore(sess,data_model)
+
 try:
     shutil.rmtree('/scratch/c2015/DeepFiji/logs/')
 except:
     print("log file doesn't exist")
-
 tf.set_random_seed(123456)
-sess=tf.Session()
-sess.run(tf.global_variables_initializer())
 saver = tf.train.Saver(max_to_keep=50)
 test_writer = tf.summary.FileWriter('/scratch/c2015/DeepFiji/logs/170/test')
 current_best=[0,1000000000]
 
 
-learning_rates=[0.000195, 0.0001, 0.00002, 0.00001]
+learning_rates=[0.00005, 0.00002, 0.00002, 0.00001]
 learning_rate_steps=[500,1500, 2200, 2200]
 current_step=0
 for lrate, lrs in zip(learning_rates, learning_rate_steps):
@@ -171,10 +186,8 @@ for lrate, lrs in zip(learning_rates, learning_rate_steps):
                 file.write(str(i)+'\n')
                 file.write(str(channels)+'\n')
                 file.close()
-            #for ti in range (0,3):
-             #   utils.plot_3x1(sub_validation_data[ti,:,:,0], results[ti,:,:,0], results[ti,:,:,1])
-             #   plt.show()
+            for ti in range (0,3):
+                #utils.plot_3x1(sub_validation_data[ti,:,:,0], results[ti,:,:,0], results[ti,:,:,1])
+                plt.show()
             saver.save(sess, data+'NewModels/Model'+str(i))
     current_step=lrs
-    
-    
