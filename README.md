@@ -8,3 +8,4 @@ on our deep learning workstation, volta.
 
 #### model_runner.py
 ```model_runner.py``` runs on deep learning workstation listening for requests on port 8080.
+It handles running training and inference, and can also kill an existing process.
