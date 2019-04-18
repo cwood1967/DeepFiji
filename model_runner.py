@@ -39,19 +39,22 @@ class model_runner(object):
                                   stdout=subprocess.PIPE,
                                   encoding='utf-8')
             out = proc.stdout
+            print(out)
             sout = out.split('\n')
             for line in sout:
                 if self.gpustring in line:
                     res0 = line
                     break
             p = res0.split('|')
+            print("************", p)
             res = int(p[-2].split('/')[0])
             if res > 0:
-                res = False
+                res = 0
             else:
-                res = True
+                res = 1
         except:
-            res = sys.exc_info()[0]
+            print(sys.exc_info()[0])
+            res = -1 #sys.exc_info()[0]
 
         return res
 
@@ -59,18 +62,21 @@ class model_runner(object):
     @cherrypy.expose
     def checkgpu(self):
         a = self.is_gpu_available()
-        if a:
-            return "GPU is available"
+        if a == 1:
+            return "GPU is available - 1"
+        elif a == 0:
+            return "GPU is busy - 0"
         else:
-            return "GPU is busy"
+            return "maybe it is, maybe it isn't - check with nvidia-smi"
 
 
     def run_training(self, path, cmd):
         if model_runner.lock is True:
-            return "Already running ....?"
+            return -2
 
-        if not self.is_gpu_available():
-            return "GPU is busy"
+        if self.is_gpu_available() < 1:
+            print("***** check shows busy")
+            return -1
 
         subprocess.run(['killall', 'tensorboard'])
         try:
@@ -103,7 +109,7 @@ class model_runner(object):
         else:
             res += "False "
         #model_runner.lock = False
-        return ' '.join(cmd)
+        return 0
     
 
     def run_tensorboard(self):
@@ -119,11 +125,11 @@ class model_runner(object):
 
     def run_infer(self, path):
         if model_runner.lock is True:
-            return "Already running....?"
+            return -2
         #model_runner.lock = True
 
         if not self.is_gpu_available():
-            return "GPU is busy"
+            return -1
 
         cmd = self.infer_cmd + [path]
 
@@ -177,8 +183,14 @@ class model_runner(object):
         path = self.convert_path(path)
         res = self.run_training(path, cmd=self.train_cmd)
         self.run_tensorboard()
+
+        if res == 0:
+            rs = "retraining check http://volta:" + self.tb_port + " to see progress"
+        elif res == -1:
+            rs = "gpu is busy"
+        return  rs
         
-        return "check http://volta:" + self.tb_port + " to see progress"
+        return rs
 
 
     @cherrypy.expose
@@ -192,7 +204,11 @@ class model_runner(object):
         path = self.convert_path(path)
         res = self.run_training(path, cmd=self.retrain_cmd)
         self.run_tensorboard()
-        return  "retraining check http://volta:" + self.tb_port + " to see progress"
+        if res == 0:
+            rs = "retraining check http://volta:" + self.tb_port + " to see progress"
+        elif res == -1:
+            rs = "gpu is busy"
+        return  rs
     
     @cherrypy.expose
     def is_locked(self):
