@@ -152,5 +152,6 @@ def process_file(sess, file_path, save_dir):
 
 
 ##################PROCESS INPUT FOLDER ##############################
-for f in glob.glob(data+'Data_input/*'):
+for f in glob.glob(data+'Data_input/*.tif'):
+    print(f)
     output=process_file(sess, f, data+'Data_output/')

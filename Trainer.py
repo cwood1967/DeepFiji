@@ -108,7 +108,7 @@ diff=tf.subtract(probs, yr)
 LSQ=tf.multiply(diff,diff)
 #Added this to make the outlines more potent in error function
 OutError, MaskError=tf.split(LSQ, [1,1], 3)
-loss=1*tf.reduce_mean(OutError)+0.1*tf.reduce_mean(MaskError)
+loss=1*tf.reduce_mean(OutError)+0.2*tf.reduce_mean(MaskError)
 loss=tf.reduce_mean(LSQ, name='error')
 l2_loss = tf.losses.get_regularization_loss()
 #loss=loss+l2_loss/1000

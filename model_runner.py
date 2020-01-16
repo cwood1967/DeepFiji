@@ -4,12 +4,12 @@ import time
 import shutil
 import cherrypy
 import subprocess
+import socket
 
 class model_runner(object):
 
-    gpustring = 'Tesla V100-PCIE-32GB'
-
     
+
     train_cmd = ['python',
                  '/n/projects/c2015/DeepFiji/Trainer.py']
 
@@ -21,7 +21,7 @@ class model_runner(object):
 
     py_logdir = '/n/projects/c2015/DeepFiji/logs/'
 
-    tb_logdir = '/scratch/c2015/DeepFiji/logs'
+    #tb_logdir = '/scratch/c2015/DeepFiji/logs'
     tb_port = '8008'
     
     lock = False
@@ -29,10 +29,18 @@ class model_runner(object):
 
     f = None
     
-    def __init__(self):
-        pass
-        #self.lock = False
+    def __init__(self, hostname):
+        self.hostname = hostname
+        gpus = {'volta':'Tesla V100-PCIE-32GB',
+                'tesla':'Tesla P100-PCIE-16GB'}
+
+        tb_logs = {'volta': '/scratch/c2015/DeepFiji/logs',
+                   'tesla': '/ssd1/c2015/DeepFiji/logs'}
         
+        self.tb_logdir = tb_logs[self.hostname]
+        self.gpustring = gpus[hostname]
+        print("Running on ", self.hostname, 'with', self.gpustring)
+
     def is_gpu_available(self):
         try:
             proc = subprocess.run(['gpustat'],
@@ -75,7 +83,7 @@ class model_runner(object):
             return -2
 
         if self.is_gpu_available() < 1:
-            print("***** check shows busy")
+            print("***** check shows gpu busy")
             return -1
 
         subprocess.run(['killall', 'tensorboard'])
@@ -84,10 +92,11 @@ class model_runner(object):
         except:
             pass
         
-        if os.path.exists("train.log"):
-            os.remove("train.log")
+        tlog = '{}_train.log'.format(self.hostname)
+        if os.path.exists(tlog):
+            os.remove(tlog)
             
-        model_runner.f = open("train.log", 'w')
+        model_runner.f = open(tlog, 'w')
         #model_runner.lock = True
 
         cmd = cmd + [path]
@@ -97,7 +106,7 @@ class model_runner(object):
         except:
             pass
         
-        model_runner.f = open(self.py_logdir + 'training.log', 'w')
+        model_runner.f = open(self.py_logdir + '{}_training.log'.format(self.hostname), 'w')
         
         model_runner.proc = subprocess.Popen(cmd, stdout=model_runner.f,
                                              stderr=subprocess.STDOUT, bufsize=1,
@@ -138,7 +147,7 @@ class model_runner(object):
         except:
             pass
         
-        model_runner.f = open(self.py_logdir + 'inferer.log', 'w')
+        model_runner.f = open(self.py_logdir + '{}_inferer.log'.format(hostname), 'w')
         
         model_runner.proc = subprocess.Popen(cmd, stdout=model_runner.f,
                                              stderr=subprocess.STDOUT, bufsize=1,
@@ -160,7 +169,8 @@ class model_runner(object):
                     'U:' : '/n/projects',
                     '/Volumes': '/n',
                     's:' : '/n/core',
-                    'u:' : '/n/projects'
+                    'u:' : '/n/projects',
+                    '//ion' : '/n'
                     }
     
         path = path.replace('\\', '/')
@@ -185,12 +195,10 @@ class model_runner(object):
         self.run_tensorboard()
 
         if res == 0:
-            rs = "retraining check http://volta:" + self.tb_port + " to see progress"
+            rs = "training check http://{}:".format(hostname) + self.tb_port + " to see progress"
         elif res == -1:
             rs = "gpu is busy"
         return  rs
-        
-        return rs
 
 
     @cherrypy.expose
@@ -205,7 +213,7 @@ class model_runner(object):
         res = self.run_training(path, cmd=self.retrain_cmd)
         self.run_tensorboard()
         if res == 0:
-            rs = "retraining check http://volta:" + self.tb_port + " to see progress"
+            rs = "retraining check http://{}:".format(hostname) + self.tb_port + " to see progress"
         elif res == -1:
             rs = "gpu is busy"
         return  rs
@@ -236,5 +244,11 @@ class model_runner(object):
     
 if __name__ == '__main__':
     ## run this here please
-    cherrypy.config.update({'server.socket_host': 'volta'})
-    cherrypy.quickstart(model_runner())
+    sghn = socket.gethostname()
+    if 'tesla' in sghn:
+        hostname = 'tesla'
+    elif 'volta' in sghn:
+        hostname = 'volta'
+
+    cherrypy.config.update({'server.socket_host': hostname})
+    cherrypy.quickstart(model_runner(hostname))

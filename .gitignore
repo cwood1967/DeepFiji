@@ -9,3 +9,5 @@ checkpoint*
 !.gitignore
 *~
 *.log
+Thumbs.db
+nohup.out

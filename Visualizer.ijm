@@ -1,5 +1,5 @@
-thresh=0.2;
-
+thresh=0.5;
+roiManager("reset");
 t=getTitle();
 Stack.getDimensions(width, height, channels, slices, frames);
 run("Duplicate...", "title=Mask duplicate channels="+channels);
@@ -11,7 +11,7 @@ setThreshold(thresh, 1000000000000000000000000000000.0000);
 setOption("BlackBackground", true);
 run("Convert to Mask", "method=Default background=Dark black");
 roiManager("reset");
-run("Analyze Particles...", "add stack");
+run("Analyze Particles...", "size=100-Infinity add stack");
 selectWindow(t);
 run("Duplicate...", "duplicate channels=1");
 roiManager("show all");

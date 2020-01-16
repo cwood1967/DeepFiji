@@ -29,6 +29,13 @@ model_no=IJ.log(lines[5]);
 no_channels=parseInt(lines[6]);
 window_size=x_dim;
 
+Dialog.create("Choose machine");
+Dialog.addChoice("Machine", newArray("tesla", "volta"));
+Dialog.addChoice("Masks or Spots: ", newArray("Masks", "Spots"), "Masks");
+Dialog.show();
+machine=Dialog.getChoice();
+mask_spots=Dialog.getChoice();
+
 //*********************MAKE ANNOTATED FILES*********************************//
 retrain_list = getFileList(retrain_directory);
 number_of_files=0;
@@ -54,29 +61,42 @@ for (n=0; n<retrain_list.length; n++)
 
 		t=getTitle();
 		run("32-bit");
-		Stack.setChannel(no_channels+1);
-		run("Select All");
-		setBackgroundColor(0, 0, 0);
-		run("Clear", "slice");
-		Stack.setChannel(no_channels+2);
-		run("Select All");
-		setBackgroundColor(0, 0, 0);
-		run("Clear", "slice");
-		
-		count=roiManager("Count");
-		
-		setForegroundColor(255, 255, 255);
-		Stack.getDimensions(width, height, channels, slices, frames);
-		for (i=0; i<count; i++)
+		if (matches("Masks", mask_spots))
 		{
+			Stack.setChannel(no_channels+1);
+			run("Select All");
+			setBackgroundColor(0, 0, 0);
+			run("Clear", "slice");
+			Stack.setChannel(no_channels+2);
+			run("Select All");
+			setBackgroundColor(0, 0, 0);
+			run("Clear", "slice");
+			
+			count=roiManager("Count");
+			
 			setForegroundColor(255, 255, 255);
-		    roiManager("Select", i);
-		    Stack.setChannel(channels-1);
-		    run("Draw", "slice");
-		    Stack.setChannel(channels);
-		    run("Fill", "slice");
-		    setForegroundColor(0,0,0);
-		    run("Draw", "slice");
+			Stack.getDimensions(width, height, channels, slices, frames);
+			for (i=0; i<count; i++)
+			{
+				setForegroundColor(255, 255, 255);
+			    roiManager("Select", i);
+			    Stack.setChannel(channels-1);
+			    run("Draw", "slice");
+			    Stack.setChannel(channels);
+			    run("Fill", "slice");
+			    setForegroundColor(0,0,0);
+			    run("Draw", "slice");
+			}
+		}
+		else
+		{
+			Stack.getDimensions(width, height, channels, slices, frames);
+			Stack.setChannel(channels-1);
+			run("Delete Slice", "delete=channel");
+			Stack.setChannel(channels-1);
+			run("Delete Slice", "delete=channel");
+			run("PointROI To MaskChannel");
+			run("Make Composite", "display=Composite");
 		}
 		setForegroundColor(255, 255, 255);
 	
@@ -86,8 +106,9 @@ for (n=0; n<retrain_list.length; n++)
 		run("Canvas Size...", "width="+x+" height="+y+" position=Center zero");
 		run("32-bit");
 		run("Stack to Hyperstack...", "order=xyczt(default) channels="+channels+" slices="+(slices*frames)+" frames=1 display=Color");
-		
 		//saveAs("Tiff", annotated_file);
+		run("Make Windows", "window="+window_size+" z=1 staggered?");
+		run("Make Composite", "display=Composite");
 		run("Save As Tiff", "save=["+retrain_tmp_directory+"Img"+IJ.pad(number_of_files,2)+"]");
 		run("Close All");
 	}
@@ -119,7 +140,7 @@ rename(tt);
 Stack.getDimensions(width, height, channels, slices, frames);
 mem_size=width*height*channels*slices*frames*4/1024/1024/1024;
 
-number_turns=floor(8/mem_size);
+number_turns=floor(16/mem_size);
 number_turns=minOf(100, number_turns);
 
 run("Select All");
@@ -146,5 +167,5 @@ run("Concatenate...", "all_open title=[Concatenated Stacks]");
 //saveAs("Tiff", rot_shift_file);
 run("Save As Tiff", "save=["+rot_shift_retrain_file+"]");
 run("Close All");
-run("open URL", "url="+"http://volta:8080/retrain?path="+source_dir);
-run("open URL browser", "url=http://volta:8008");
+run("open URL", "url="+"http://"+machine+":8080/retrain?path="+source_dir);
+run("open URL browser", "url=http://"+machine+":8008");

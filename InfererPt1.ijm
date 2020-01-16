@@ -45,6 +45,41 @@ f=File.open(config_file);
 print(f, ""+base_scaler+"\n"+baseline_noise+"\n"+x_dim+"\n"+mean+"\n"+std+"\n"+model_no+"\n"+no_channels+"\n");
 File.close(f);
 
+Dialog.create("Choose machine");
+Dialog.addChoice("Machine", newArray("tesla", "volta"));
+Dialog.show();
+machine=Dialog.getChoice();
+
+function break_and_save()
+{
+	limit=12*1024*1024*1024;
+	Stack.getDimensions(width, height, channels, slices, frames);
+	frame_size=width*height*4*channels;
+	total_size=width*height*4*channels*frames;
+	num_images=floor(total_size/limit)+1;
+	if (floor(total_size/limit)==total_size/limit) num_images=num_images-1;
+
+	frames_per_batch=floor(frames/num_images)+1;
+	if (floor(frames/num_images)==frames/num_images) frames_per_batch=frames_per_batch-1;
+	curt=getTitle();
+
+	IJ.log(""+frame_size);
+	IJ.log(""+total_size);
+	IJ.log(""+num_images);
+	IJ.log(""+frames_per_batch);
+	
+	for (i=0; i<num_images; i++)
+	{
+		selectWindow(curt);
+		fstart=1+i*frames_per_batch;
+		fstop=fstart+frames_per_batch-1;
+		fstop=minOf(frames, fstop);
+		IJ.log(""+fstart+","+fstop);
+		run("Duplicate...", "duplicate frames="+fstart+"-"+fstop);
+		run("Save As Tiff", "save=["+inference_dir+infile_name+"pt"+i+"]");
+		close();
+	}	
+}
 
 process_list = getFileList(process_dir);
 IJ.log(process_list[0]);
@@ -65,11 +100,11 @@ for (n=0; n<process_list.length; n++)
 	run("Make Windows", "window="+x_dim+" z=1 staggered?");
 	//run("Make Composite", "display=Grayscale");
 	infile_name=process_list[n];
-	//saveAs("Tiff", inference_dir+infile_name);
-	run("Save As Tiff", "save=["+inference_dir+infile_name+"]");
+	//run("Save As Tiff", "save=["+inference_dir+infile_name+"]");
+	break_and_save();
 	run("Close All");
 
 }
 
 ////*****************CALL WEBPAGE*********************************
-run("open URL", "url="+"http://volta:8080/infer?path="+source_dir);
+run("open URL", "url="+"http://"+machine+":8080/infer?path="+source_dir);
