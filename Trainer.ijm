@@ -28,6 +28,8 @@ validation_annotated_file=substring(validation_file, 0, lengthOf(validation_file
 rot_shift_file=substring(training_file,0,lengthOf(training_file)-4)+"_RotShift.tif";
 config_file=source_dir+"Network.txt";
 
+GaussianBlur=1.0;
+
 downsample_amount=1;
 if (downsample==1) downsample_amount=0.5;
 if (downsample==2) downsample_amount=0.25;
@@ -54,7 +56,7 @@ if (!File.exists(training_file))
 	source_list = getFileList(training_folder);
 	count=0;
 	roiManager("reset");
-	pos_array=newArray(1+floor(source_list.length/2));
+	pos_array=newArray(1+floor(source_list.length));
 	pos_array[0]=0;
 	for (n=0; n<source_list.length; n++)
 	{
@@ -64,7 +66,17 @@ if (!File.exists(training_file))
 	        rname=substring(fname, 0, lengthOf(fname)-4)+".zip";
 	    	run("Bio-Formats Importer", "open=["+fname+"] autoscale color_mode=Default rois_import=[ROI manager] view=Hyperstack stack_order=XYCZT");
 	    	//rename("A");
-	    	open(rname);
+			if (File.exists(rname))
+			{
+				open(rname);
+			}
+			rname=substring(fname, 0, lengthOf(fname)-4)+".zip.roi";
+			if (File.exists(rname))
+			{
+				open(roi_file);
+				roiManager("Add");
+			}
+	    	//open(rname);
 	    	pos_array[count+1]=roiManager("count");
 	    	count=count+1;
 	    }
@@ -137,12 +149,12 @@ if (!File.exists(annotated_file))
 		}*/
 		t=getTitle();
 		run("Select All");
-		run("Duplicate...", "title=Mask duplicate");
+		run("Duplicate...", "title=Mask duplicate channels=1");
 		run("Select All");
 		setBackgroundColor(0, 0, 0);
 		run("Clear", "stack");
 		
-		run("Duplicate...", "title=Outline duplicate");
+		run("Duplicate...", "title=Outline duplicate channels=1");
 		selectWindow("Mask");
 		ct=roiManager("Count");
 		for (i=0; i<ct; i++)
@@ -163,11 +175,14 @@ if (!File.exists(annotated_file))
 		}
 		
 		//imageCalculator("Subtract stack", "Mask","Outline");
-		run("Merge Channels...", "c1="+t+" c2=Outline c3=Mask create");
+		selectWindow(t);
+		run("add channel", "target=Outline");
+		run("add channel", "target=Mask");
+		//run("Merge Channels...", "c1="+t+" c2=Outline c3=Mask create");
 	}
 	else
 	{
-		run("PointROI To MaskChannel");
+		run("PointROI To MaskChannel", "blur="+GaussianBlur);
 		run("Make Composite", "display=Composite");
 	}
 	setForegroundColor(255, 255, 255);
@@ -189,7 +204,8 @@ if (!File.exists(annotated_file))
 if (!File.exists(validation_annotated_file))
 {
 	roiManager("reset");
-	open(validation_file);
+	//open(validation_file);
+	run("Bio-Formats Importer", "open=["+validation_file+"] autoscale color_mode=Default rois_import=[ROI manager] view=Hyperstack stack_order=XYCZT");
 	run("Select All");
 	open(source_dir+"Validation.zip");
 	
@@ -237,12 +253,12 @@ if (!File.exists(validation_annotated_file))
 		}*/
 		t=getTitle();
 		run("Select All");
-		run("Duplicate...", "title=Mask duplicate");
+		run("Duplicate...", "title=Mask duplicate channels=1");
 		run("Select All");
 		setBackgroundColor(0, 0, 0);
 		run("Clear", "stack");
 		
-		run("Duplicate...", "title=Outline duplicate");
+		run("Duplicate...", "title=Outline duplicate channels=1");
 		selectWindow("Mask");
 		ct=roiManager("Count");
 		for (i=0; i<ct; i++)
@@ -264,11 +280,14 @@ if (!File.exists(validation_annotated_file))
 		}
 		
 		//imageCalculator("Subtract stack", "Mask","Outline");
-		run("Merge Channels...", "c1="+t+" c2=Outline c3=Mask create");
+		selectWindow(t);
+		run("add channel", "target=Outline");
+		run("add channel", "target=Mask");
+		//run("Merge Channels...", "c1="+t+" c2=Outline c3=Mask create");
 	}
 	else
 	{
-	    run("PointROI To MaskChannel");
+	    run("PointROI To MaskChannel", "blur="+GaussianBlur);
 		run("Make Composite", "display=Composite");
 	}
 	setForegroundColor(255, 255, 255);
@@ -284,6 +303,7 @@ if (!File.exists(validation_annotated_file))
 	run("Stack to Hyperstack...", "order=xyczt(default) channels="+channels+" slices="+(slices*frames)+" frames=1 display=Color");
 	
 	run("Make Windows", "window="+window_size+" z=1 staggered?");
+	selectWindow("NewImg");
 	run("Make Composite", "display=Composite");
 	
 	//saveAs("Tiff", validation_annotated_file);

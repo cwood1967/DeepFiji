@@ -32,7 +32,7 @@ class model_runner(object):
     def __init__(self, hostname):
         self.hostname = hostname
         gpus = {'volta':'Tesla V100-PCIE-32GB',
-                'tesla':'Tesla P100-PCIE-16GB'}
+                'tesla':'Quadro RTX 8000'}
 
         tb_logs = {'volta': '/scratch/c2015/DeepFiji/logs',
                    'tesla': '/ssd1/c2015/DeepFiji/logs'}

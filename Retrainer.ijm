@@ -21,6 +21,8 @@ retrain_tmp_directory=source_dir+"RetrainTmp"+File.separator;
 
 File.makeDirectory(retrain_tmp_directory);
 
+GaussianBlur=1.0;
+
 config_file=source_dir+"Network.txt";
 f=File.openAsString(config_file);
 lines=split(f, "\n");
@@ -95,7 +97,7 @@ for (n=0; n<retrain_list.length; n++)
 			run("Delete Slice", "delete=channel");
 			Stack.setChannel(channels-1);
 			run("Delete Slice", "delete=channel");
-			run("PointROI To MaskChannel");
+			run("PointROI To MaskChannel", "blur="+GaussianBlur);
 			run("Make Composite", "display=Composite");
 		}
 		setForegroundColor(255, 255, 255);

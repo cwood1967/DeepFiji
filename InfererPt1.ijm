@@ -87,7 +87,8 @@ for (n=0; n<process_list.length; n++)
 {
 	cur_file=process_dir+process_list[n];
 	IJ.log(cur_file);
-	open(cur_file);
+	//open(cur_file);
+	run("Bio-Formats Importer", "open=["+cur_file+"] autoscale color_mode=Default rois_import=[ROI manager] view=Hyperstack stack_order=XYCZT");
 	Stack.getDimensions(width, height, channels, slices, frames);
 
 	x=(floor((width-1)/x_dim)+1)*x_dim;
